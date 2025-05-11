@@ -27,15 +27,15 @@ source .venv/bin/activate
 pip install fastapi uvicorn
 uvicorn main:app --reload
 
-##  Authors
--Indrayani Bhosale
-**CWID:** 842614851
+Authors
+Indrayani Bhosale
+CWID: 842614851
 
--Janya Jaiswal
-**CWID:** 878062934
+Janya Jaiswal
+CWID: 878062934
 
--Shrutik Kupekar
-**CWID:** 884426727
+Shrutik Kupekar
+CWID: 884426727
 
 
 
