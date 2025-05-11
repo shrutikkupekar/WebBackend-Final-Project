@@ -15,7 +15,7 @@ A backend FastAPI project to manage access to cloud services based on user subsc
 - Python 3.10+
 - FastAPI
 - Swagger UI
-- In-memory DB (for demo purposes)
+- In-memory DB (for demo purposes)  
 
 ##  How to Run
 
@@ -26,3 +26,18 @@ python3 -m venv .venv
 source .venv/bin/activate
 pip install fastapi uvicorn
 uvicorn main:app --reload
+
+##  Authors
+-Indrayani Bhosale
+**CWID:** 842614851
+
+-Janya Jaiswal
+**CWID:** 878062934
+
+-Shrutik Kupekar
+**CWID:** 884426727
+
+
+
+
+
