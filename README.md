@@ -2,6 +2,17 @@
 
 A backend FastAPI project to manage access to cloud services based on user subscriptions and permissions.
 
+## Authors
+
+**Indrayani Bhosale**  
+**CWID:** 842614851  
+
+**Janya Jaiswal**  
+**CWID:** 878062934  
+
+**Shrutik Kupekar**  
+**CWID:** 884426727  
+
 ##  Features
 
 - Role-based access (Admin/Customer)
@@ -27,15 +38,6 @@ source .venv/bin/activate
 pip install fastapi uvicorn
 uvicorn main:app --reload
 
-Authors
-Indrayani Bhosale
-CWID: 842614851
-
-Janya Jaiswal
-CWID: 878062934
-
-Shrutik Kupekar
-CWID: 884426727
 
 
 
