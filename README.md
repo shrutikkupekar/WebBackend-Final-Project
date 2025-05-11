@@ -1,8 +1,8 @@
-# ☁️ Cloud Service Access Management System
+#  Cloud Service Access Management System
 
 A backend FastAPI project to manage access to cloud services based on user subscriptions and permissions.
 
-## 🔧 Features
+##  Features
 
 - Role-based access (Admin/Customer)
 - Subscription plans with API limits
@@ -10,14 +10,14 @@ A backend FastAPI project to manage access to cloud services based on user subsc
 - Mock token-based login for simplicity
 - Swagger UI for testing endpoints
 
-## 🛠️ Technologies Used
+##  Technologies Used
 
 - Python 3.10+
 - FastAPI
 - Swagger UI
 - In-memory DB (for demo purposes)
 
-## 🚀 How to Run
+##  How to Run
 
 ```bash
 git clone https://github.com/shrutikkupekar/WebBackend-Final-Project.git
