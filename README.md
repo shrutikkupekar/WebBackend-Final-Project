@@ -26,7 +26,7 @@ A backend FastAPI project to manage access to cloud services based on user subsc
 - Python 3.10+
 - FastAPI
 - Swagger UI
-- In-memory DB (for demo purposes)  
+- MongoDB 
 
 ##  How to Run
 
