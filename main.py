@@ -74,6 +74,15 @@ async def get_permissions(user: User = Depends(get_current_user)):
     permissions = await db.permissions.find().to_list(100)
     return permissions
 
+@app.delete("/permissions/{perm_id}")
+async def delete_permission(perm_id: str, user: User = Depends(get_current_user)):
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    result = await db.permissions.delete_one({"id": perm_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Permission not found")
+    return {"status": f"Permission {perm_id} deleted"}
+
 # --------------------
 # Admin: Plans
 # --------------------
@@ -98,6 +107,15 @@ async def get_plans(user: User = Depends(get_current_user)):
     plans = await db.plans.find().to_list(100)
     return plans
 
+@app.delete("/plans/{plan_id}")
+async def delete_plan(plan_id: str, user: User = Depends(get_current_user)):
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    result = await db.plans.delete_one({"id": plan_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Plan not found")
+    return {"status": f"Plan {plan_id} deleted"}
+
 # ----------------------------
 # Customer: Subscriptions
 # ----------------------------
@@ -115,11 +133,18 @@ async def view_subscription(user_id: str):
         raise HTTPException(status_code=404, detail="Subscription not found")
     return subscription
 
-# ------------------------
-# Mock Usage (still in RAM)
-# ------------------------
-USAGE_DB = {}
+@app.delete("/subscriptions/{user_id}")
+async def delete_subscription(user_id: str, user: User = Depends(get_current_user)):
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    result = await db.subscriptions.delete_one({"user_id": user_id})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+    return {"status": f"Subscription for user {user_id} deleted"}
 
+# ------------------------
+# Usage Tracking with MongoDB
+# ------------------------
 @app.get("/access/{user_id}/{api_name}")
 async def check_access(user_id: str, api_name: str):
     subscription = await db.subscriptions.find_one({"user_id": user_id})
@@ -130,24 +155,40 @@ async def check_access(user_id: str, api_name: str):
     if not plan or api_name not in plan["api_permissions"]:
         raise HTTPException(status_code=403, detail="API not allowed")
 
-    usage_key = f"{user_id}:{api_name}"
-    usage = USAGE_DB.get(usage_key, UsageRecord(user_id=user_id, api_name=api_name, count=0, last_reset=datetime.utcnow()))
-
-    if usage.count >= plan["api_limits"].get(api_name, 0):
+    usage = await db.usage.find_one({"user_id": user_id, "api_name": api_name})
+    if usage and usage["count"] >= plan["api_limits"].get(api_name, 0):
         raise HTTPException(status_code=429, detail="API limit exceeded")
 
     return {"access": True}
 
 @app.post("/usage/{user_id}/{api_name}")
 async def track_usage(user_id: str, api_name: str):
-    usage_key = f"{user_id}:{api_name}"
-    usage = USAGE_DB.get(usage_key)
+    usage = await db.usage.find_one({"user_id": user_id, "api_name": api_name})
     if not usage:
-        usage = UsageRecord(user_id=user_id, api_name=api_name, count=1, last_reset=datetime.utcnow())
+        usage_record = {
+            "user_id": user_id,
+            "api_name": api_name,
+            "count": 1,
+            "last_reset": datetime.utcnow()
+        }
+        await db.usage.insert_one(usage_record)
+        return {"count": 1}
     else:
-        usage.count += 1
-    USAGE_DB[usage_key] = usage
-    return {"count": usage.count}
+        new_count = usage["count"] + 1
+        await db.usage.update_one(
+            {"user_id": user_id, "api_name": api_name},
+            {"$set": {"count": new_count}}
+        )
+        return {"count": new_count}
+
+@app.delete("/usage/{user_id}/{api_name}")
+async def delete_usage(user_id: str, api_name: str, user: User = Depends(get_current_user)):
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    result = await db.usage.delete_one({"user_id": user_id, "api_name": api_name})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Usage record not found")
+    return {"status": f"Usage for {api_name} by {user_id} deleted"}
 
 # -----------------------
 # Dummy Cloud API Endpoint
