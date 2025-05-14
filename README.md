@@ -32,7 +32,6 @@ A backend FastAPI project to manage access to cloud services based on user subsc
 
 ```bash
 git clone https://github.com/shrutikkupekar/WebBackend-Final-Project.git
-cd cloud-access-manager
 python3 -m venv .venv
 source .venv/bin/activate
 pip install fastapi uvicorn
