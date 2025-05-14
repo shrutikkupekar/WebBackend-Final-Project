@@ -3,25 +3,20 @@ from fastapi.security import APIKeyHeader
 from pydantic import BaseModel
 from typing import List, Dict, Optional
 from datetime import datetime
-import uuid
+from motor.motor_asyncio import AsyncIOMotorClient
 
+# FastAPI app
 app = FastAPI()
 
+# Auth via APIKey header (Bearer token)
 oauth2_scheme = APIKeyHeader(name="Authorization")
 
-# Mock Databases
-USERS_DB = {}
-PLANS_DB = {}
-PERMISSIONS_DB = {}
-SUBSCRIPTIONS_DB = {}
-USAGE_DB = {}
+# MongoDB Connection
+client = AsyncIOMotorClient("mongodb://localhost:27017")
+db = client.cloud_access_db
 
-# Authentication
-async def get_current_user(token: str = Depends(oauth2_scheme)):
-    user = USERS_DB.get(token.replace("Bearer ", ""))
-    if not user:
-        raise HTTPException(status_code=401, detail="Invalid token")
-    return user
+# Mock token-auth users
+USERS_DB = {}
 
 # Models
 class Permission(BaseModel):
@@ -54,56 +49,95 @@ class UsageRecord(BaseModel):
     count: int
     last_reset: datetime
 
-# Admin Endpoints
+# Auth handler
+async def get_current_user(token: str = Depends(oauth2_scheme)):
+    token = token.replace("Bearer ", "")
+    user = USERS_DB.get(token)
+    if not user:
+        raise HTTPException(status_code=401, detail="Invalid token")
+    return user
+
+# --------------------
+# Admin: Permissions
+# --------------------
 @app.post("/permissions")
 async def add_permission(permission: Permission, user: User = Depends(get_current_user)):
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
-    PERMISSIONS_DB[permission.id] = permission
+    await db.permissions.insert_one(permission.dict())
     return {"status": "Permission added"}
 
+@app.get("/permissions")
+async def get_permissions(user: User = Depends(get_current_user)):
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    permissions = await db.permissions.find().to_list(100)
+    return permissions
+
+# --------------------
+# Admin: Plans
+# --------------------
 @app.post("/plans")
 async def create_plan(plan: Plan, user: User = Depends(get_current_user)):
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
-    PLANS_DB[plan.id] = plan
+    await db.plans.insert_one(plan.dict())
     return {"status": "Plan created"}
 
 @app.put("/plans/{plan_id}")
 async def modify_plan(plan_id: str, plan: Plan, user: User = Depends(get_current_user)):
     if user.role != "admin":
         raise HTTPException(status_code=403, detail="Not authorized")
-    PLANS_DB[plan_id] = plan
+    await db.plans.replace_one({"id": plan_id}, plan.dict(), upsert=True)
     return {"status": "Plan updated"}
 
-# Customer Subscription
+@app.get("/plans")
+async def get_plans(user: User = Depends(get_current_user)):
+    if user.role != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+    plans = await db.plans.find().to_list(100)
+    return plans
+
+# ----------------------------
+# Customer: Subscriptions
+# ----------------------------
 @app.post("/subscriptions")
 async def subscribe(sub: Subscription, user: User = Depends(get_current_user)):
     if user.role != "customer":
         raise HTTPException(status_code=403, detail="Not authorized")
-    SUBSCRIPTIONS_DB[user.id] = sub
+    await db.subscriptions.replace_one({"user_id": user.id}, sub.dict(), upsert=True)
     return {"status": "Subscribed"}
 
 @app.get("/subscriptions/{user_id}")
 async def view_subscription(user_id: str):
-    return SUBSCRIPTIONS_DB.get(user_id)
-
-# Access Control
-@app.get("/access/{user_id}/{api_name}")
-async def check_access(user_id: str, api_name: str):
-    subscription = SUBSCRIPTIONS_DB.get(user_id)
+    subscription = await db.subscriptions.find_one({"user_id": user_id})
     if not subscription:
         raise HTTPException(status_code=404, detail="Subscription not found")
-    plan = PLANS_DB.get(subscription.plan_id)
-    if not plan or api_name not in plan.api_permissions:
+    return subscription
+
+# ------------------------
+# Mock Usage (still in RAM)
+# ------------------------
+USAGE_DB = {}
+
+@app.get("/access/{user_id}/{api_name}")
+async def check_access(user_id: str, api_name: str):
+    subscription = await db.subscriptions.find_one({"user_id": user_id})
+    if not subscription:
+        raise HTTPException(status_code=404, detail="Subscription not found")
+
+    plan = await db.plans.find_one({"id": subscription["plan_id"]})
+    if not plan or api_name not in plan["api_permissions"]:
         raise HTTPException(status_code=403, detail="API not allowed")
+
     usage_key = f"{user_id}:{api_name}"
     usage = USAGE_DB.get(usage_key, UsageRecord(user_id=user_id, api_name=api_name, count=0, last_reset=datetime.utcnow()))
-    if usage.count >= plan.api_limits.get(api_name, 0):
+
+    if usage.count >= plan["api_limits"].get(api_name, 0):
         raise HTTPException(status_code=429, detail="API limit exceeded")
+
     return {"access": True}
 
-# Usage Tracking
 @app.post("/usage/{user_id}/{api_name}")
 async def track_usage(user_id: str, api_name: str):
     usage_key = f"{user_id}:{api_name}"
@@ -115,14 +149,18 @@ async def track_usage(user_id: str, api_name: str):
     USAGE_DB[usage_key] = usage
     return {"count": usage.count}
 
-# Dummy Cloud API
+# -----------------------
+# Dummy Cloud API Endpoint
+# -----------------------
 @app.get("/cloudapi/{service_name}")
 async def dummy_cloud_api(service_name: str, user: User = Depends(get_current_user)):
     await check_access(user.id, service_name)
     await track_usage(user.id, service_name)
     return {"service": service_name, "status": "OK"}
 
-# Mock Tokens and Users
+# -----------------------
+# Startup: Setup Mock Users
+# -----------------------
 @app.on_event("startup")
 async def setup_mock():
     USERS_DB["admin-token"] = User(id="admin1", name="Admin", role="admin")
